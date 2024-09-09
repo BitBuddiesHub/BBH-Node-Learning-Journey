@@ -117,6 +117,23 @@ assert.deepEqual(/a/gi, new Date());
 2. **传统模式的行为**：
    - 在传统模式下，`assert.deepEqual(/a/gi, new Date());` 不会抛出 `AssertionError`，即使正则表达式和日期对象显然不同。这是因为传统模式使用非严格的 `==` 操作符进行比较，而这种情况下 `==` 可能不会区分复杂对象之间的差异。
 
+  让我们分析一下这个特定的例子：
+
+  ```javascript
+  assert.deepEqual(/a/gi, new Date());
+  ```
+
+  - `/a/gi` 是一个正则表达式对象（RegExp）。
+  - `new Date()` 是一个日期对象（Date）。
+
+  根据 `assert.deepEqual()` 的工作原理，它会递归地比较对象的**属性**和**原型链**，而不仅仅是比较引用。但是，`assert.deepEqual()` 并不会检查对象的实际类型（例如它是正则表达式还是日期对象）。因此，如果对象的**内部结构**类似，`deepEqual()` 可能会误判为相等，即使它们在语义上是完全不同的类型。
+
+  在这种情况下：
+
+  - 正则表达式对象和日期对象虽然类型不同，但它们都有一些类似的内部结构（例如，它们都有类似的隐藏属性）。
+  - 因此，传统模式下的 `deepEqual()` 比较不会抛出 `AssertionError`，即它会认为 `/a/gi` 和 `new Date()` 是“深度相等的”，即使它们显然是完全不同的对象。
+
+
 # Class: assert.AssertionError
 
 ## 继承自: `<errors.Error>`
@@ -815,3 +832,721 @@ assert.equal({ a: { b: 1 } }, { a: { b: 1 } });
 #### 错误消息：
 如果 `actual` 和 `expected` 的值不相等，`assert.equal()` 会抛出 `AssertionError`。如果传入了 `message` 参数，该消息会被附加到错误消息中。如果 `message` 未定义，则会使用默认错误消息。如果 `message` 是 `Error` 实例，则会抛出该错误，而不是 `AssertionError`。
 
+---
+
+### `assert.fail([message])`
+
+#### 引入版本:
+- v0.1.21
+
+#### 参数:
+- `message <string> | <Error>`: 可选的错误消息或错误对象，默认值为 `'Failed'`。
+
+`assert.fail()` 抛出一个带有提供的错误消息或默认消息的 `AssertionError`。如果 `message` 参数是一个 `Error` 实例，则会直接抛出该错误而不是 `AssertionError`。
+
+#### 示例:
+
+```javascript
+const assert = require('node:assert/strict');
+
+// 抛出默认错误消息 'Failed'
+assert.fail();
+// AssertionError [ERR_ASSERTION]: Failed
+
+// 抛出自定义错误消息 'boom'
+assert.fail('boom');
+// AssertionError [ERR_ASSERTION]: boom
+
+// 抛出 TypeError 而不是 AssertionError
+assert.fail(new TypeError('need array'));
+// TypeError: need array
+```
+
+使用 `assert.fail()` 时可以传递多个参数，但此用法已弃用。详情见下文。
+
+---
+
+### `assert.fail(actual, expected[, message[, operator[, stackStartFn]]])`
+
+#### 历史背景:
+- **稳定性**: `0 - Deprecated`（已弃用）: 建议使用 `assert.fail([message])` 或其他断言函数。
+
+#### 参数:
+- `actual <any>`: 实际值。
+- `expected <any>`: 预期值。
+- `message <string> | <Error>`: 可选的错误消息或错误对象。
+- `operator <string>`: 操作符，默认值为 `'!='`。
+- `stackStartFn <Function>`: 默认值为 `assert.fail`，用于截断堆栈跟踪中的帧。
+
+如果 `message` 参数为假值（例如 `undefined` 或 `null`），错误消息会设置为实际值和预期值之间的比较结果，使用提供的操作符分隔。如果只提供了 `actual` 和 `expected` 参数，操作符默认是 `'!='`。如果提供了 `message` 参数作为第三个参数，则该消息会作为错误消息，其他参数会存储为抛出的错误对象的属性。如果传入 `stackStartFn`，则堆栈跟踪中该函数之上的帧将被移除。
+
+#### 示例:
+
+```javascript
+const assert = require('node:assert/strict');
+
+// 抛出错误，消息为 'a != b'
+assert.fail('a', 'b');
+// AssertionError [ERR_ASSERTION]: 'a' != 'b'
+
+// 使用自定义操作符，抛出错误，消息为 '1 > 2'
+assert.fail(1, 2, undefined, '>');
+// AssertionError [ERR_ASSERTION]: 1 > 2
+
+// 使用自定义错误消息 'fail'
+assert.fail(1, 2, 'fail');
+// AssertionError [ERR_ASSERTION]: fail
+
+// 使用自定义操作符 '>' 和自定义错误消息 'whoops'
+assert.fail(1, 2, 'whoops', '>');
+// AssertionError [ERR_ASSERTION]: whoops
+
+// 抛出自定义错误类型 TypeError
+assert.fail(1, 2, new TypeError('need array'));
+// TypeError: need array
+```
+
+在最后三个示例中，`actual`、`expected` 和 `operator` 对错误消息没有影响，因为 `message` 参数是自定义的错误消息或错误对象。
+
+---
+
+### `stackStartFn` 的使用示例：
+`stackStartFn` 用于截断异常的堆栈跟踪，从而使堆栈信息从指定的函数开始显示。
+
+#### 示例:
+
+```javascript
+const assert = require('node:assert/strict');
+
+function suppressFrame() {
+  // 通过传入 suppressFrame，堆栈跟踪从该函数之后开始
+  assert.fail('a', 'b', undefined, '!==', suppressFrame);
+}
+suppressFrame();
+// AssertionError [ERR_ASSERTION]: 'a' !== 'b'
+//     at repl:1:1
+//     at ContextifyScript.Script.runInThisContext (vm.js:44:33)
+//     ...
+```
+
+在上述示例中，`assert.fail()` 被调用时，传递了 `suppressFrame` 作为 `stackStartFn` 参数，从而使堆栈跟踪中不显示 `suppressFrame` 之前的调用堆栈帧。
+
+#### 总结:
+- `assert.fail([message])` 是用于手动触发 `AssertionError` 的快捷方式，如果传入 `Error` 实例，它会抛出该错误而不是 `AssertionError`。
+- `assert.fail(actual, expected[, message[, operator[, stackStartFn]]])` 是旧版的用法，已被弃用，建议使用新的断言方法。这个版本允许自定义错误消息和操作符，并且可以通过 `stackStartFn` 控制堆栈跟踪的起始位置。
+
+---
+
+### `assert.ifError(value)`
+
+#### 历史背景
+- **引入版本**: v0.1.97
+- **v10.0.0 更新**: 
+  - 错误会被封装到 `AssertionError` 中，并包含完整的堆栈跟踪。
+  - 现在只允许 `value` 为 `undefined` 或 `null`。在之前的版本中，所有假值（如 `0`, `false`）都被视为 `null`，不会抛出错误。
+
+#### 参数:
+- `value <any>`: 如果 `value` 不为 `undefined` 或 `null`，则抛出该值作为错误。
+
+`assert.ifError()` 会在 `value` 不为 `undefined` 或 `null` 时抛出错误。通常用于测试回调函数中的错误参数。堆栈跟踪会包含传递给 `ifError()` 的错误以及 `ifError()` 本身的潜在新帧。
+
+#### 示例：
+
+```javascript
+const assert = require('node:assert/strict');
+
+// 由于 null 是可接受的，断言通过
+assert.ifError(null);
+// OK
+
+// 由于 0 被视为错误值，抛出 AssertionError
+assert.ifError(0);
+// AssertionError [ERR_ASSERTION]: ifError got unwanted exception: 0
+
+// 抛出 AssertionError，因为 'error' 是非空字符串
+assert.ifError('error');
+// AssertionError [ERR_ASSERTION]: ifError got unwanted exception: 'error'
+
+// 抛出错误对象本身
+assert.ifError(new Error());
+// AssertionError [ERR_ASSERTION]: ifError got unwanted exception: Error
+```
+
+#### 示例：错误堆栈跟踪
+`assert.ifError()` 也会捕获完整的堆栈跟踪。
+
+```javascript
+// 创建一些随机错误帧
+let err;
+(function errorFrame() {
+  err = new Error('test error');
+})();
+
+(function ifErrorFrame() {
+  assert.ifError(err);
+})();
+// AssertionError [ERR_ASSERTION]: ifError got unwanted exception: test error
+//     at ifErrorFrame
+//     at errorFrame
+```
+
+---
+
+### `assert.match(string, regexp[, message])`
+
+#### 历史背景
+- **引入版本**: v13.6.0, v12.16.0
+- **v16.0.0 更新**: 该 API 不再是实验性功能。
+
+#### 参数:
+- `string <string>`: 要进行匹配的字符串。
+- `regexp <RegExp>`: 用于匹配的正则表达式。
+- `message <string> | <Error>`: 可选的错误消息或错误对象。
+
+`assert.match()` 断言输入字符串**应**匹配提供的正则表达式。如果字符串与正则表达式不匹配，或者 `string` 参数不是字符串类型，则会抛出 `AssertionError`。
+
+#### 示例：
+
+```javascript
+const assert = require('node:assert/strict');
+
+// 断言失败，因为字符串 "I will fail" 不匹配正则表达式 /pass/
+assert.match('I will fail', /pass/);
+// AssertionError [ERR_ASSERTION]: The input did not match the regular ...
+
+// 断言失败，因为输入值不是字符串类型
+assert.match(123, /pass/);
+// AssertionError [ERR_ASSERTION]: The "string" argument must be of type string.
+
+// 断言通过，因为字符串 "I will pass" 匹配正则表达式 /pass/
+assert.match('I will pass', /pass/);
+// OK
+```
+
+#### 错误消息：
+如果值不匹配，或者 `string` 参数不是字符串类型，`assert.match()` 会抛出 `AssertionError`，错误消息会根据 `message` 参数设置。如果 `message` 未定义，则使用默认错误消息。如果 `message` 是 `Error` 实例，则会抛出该错误。
+
+---
+
+### `assert.notDeepEqual(actual, expected[, message])`
+
+#### 历史背景
+- **引入版本**: v0.1.21
+- **v16.0.0, v14.18.0 更新**: 在传统断言模式中，状态从 "已弃用" 更改为 "传统"。
+- **v14.0.0 更新**: `NaN` 被视为相等，如果两边都是 `NaN`。
+- **v9.0.0 更新**: 错误的名称和消息现在会被正确比较。
+- **v8.0.0 更新**: `Set` 和 `Map` 的内容也会被比较。
+- **v6.4.0, v4.7.1 更新**: 处理类型数组切片正确。
+- **v6.1.0, v4.5.0 更新**: 支持带有循环引用的对象作为输入。
+- **v5.10.1, v4.4.3 更新**: 正确处理非 `Uint8Array` 类型的数组。
+
+#### 参数:
+- `actual <any>`: 实际值。
+- `expected <any>`: 预期值。
+- `message <string> | <Error>`: 可选的错误消息或错误对象。
+
+#### 严格断言模式:
+`assert.notDeepEqual()` 是 `assert.notDeepStrictEqual()` 的别名。
+
+#### 传统断言模式:
+**稳定性**: `3 - Legacy`（建议使用 `assert.notDeepStrictEqual()`）。
+
+`assert.notDeepEqual()` 测试两个值之间的深度不相等。它与 `assert.deepEqual()` 相反。
+
+#### 示例：
+
+```javascript
+const assert = require('node:assert');
+
+const obj1 = {
+  a: {
+    b: 1,
+  },
+};
+const obj2 = {
+  a: {
+    b: 2,
+  },
+};
+const obj3 = {
+  a: {
+    b: 1,
+  },
+};
+const obj4 = { __proto__: obj1 };
+
+// 断言失败，因为 obj1 和自身是深度相等的
+assert.notDeepEqual(obj1, obj1);
+// AssertionError: { a: { b: 1 } } notDeepEqual { a: { b: 1 } }
+
+// 断言通过，因为 obj1 和 obj2 的 b 属性不同
+assert.notDeepEqual(obj1, obj2);
+// OK
+
+// 断言失败，因为 obj1 和 obj3 是深度相等的
+assert.notDeepEqual(obj1, obj3);
+// AssertionError: { a: { b: 1 } } notDeepEqual { a: { b: 1 } }
+
+// 断言通过，因为 obj4 的原型链被忽略
+assert.notDeepEqual(obj1, obj4);
+// OK
+```
+
+#### 错误消息：
+如果值是深度相等的，`assert.notDeepEqual()` 会抛出 `AssertionError`。如果 `message` 参数未定义，则会使用默认错误消息。如果 `message` 是 `Error` 实例，则会抛出该错误而不是 `AssertionError`。
+
+### `assert.notDeepStrictEqual(actual, expected[, message])`
+
+#### 历史背景
+- **引入版本**: v1.2.0
+- **v9.0.0 更新**:
+  - `-0` 和 `+0` 不再被视为相等。
+  - `NaN` 现在使用 SameValueZero 比较。
+  - 错误的名称和消息现在会正确比较。
+- **v8.0.0 更新**: `Set` 和 `Map` 的内容也会被比较。
+- **v6.1.0 更新**: 支持循环引用对象。
+- **v6.4.0, v4.7.1 更新**: 正确处理类型数组切片。
+- **v5.10.1, v4.4.3 更新**: 正确处理非 `Uint8Array` 类型的数组。
+
+#### 参数:
+- `actual <any>`: 实际值。
+- `expected <any>`: 预期值。
+- `message <string> | <Error>`: 可选的错误消息或错误对象。
+
+`assert.notDeepStrictEqual()` 用于测试两个值是否存在深度严格不相等关系。它与 `assert.deepStrictEqual()` 的行为相反。如果两个值深度严格相等，则会抛出 `AssertionError`。
+
+#### 示例：
+
+```javascript
+const assert = require('node:assert/strict');
+
+// 通过断言，因为 1 和 '1' 类型不同
+assert.notDeepStrictEqual({ a: 1 }, { a: '1' });
+// OK
+```
+
+#### 错误消息：
+如果 `actual` 和 `expected` 深度严格相等，则抛出 `AssertionError`。如果 `message` 参数未定义，则会使用默认错误消息。如果 `message` 是 `Error` 实例，则会抛出该错误而不是 `AssertionError`。
+
+---
+
+### `assert.notEqual(actual, expected[, message])`
+
+#### 历史背景
+- **引入版本**: v0.1.21
+- **v16.0.0, v14.18.0 更新**: 在传统断言模式中，状态从 "已弃用" 更改为 "传统"。
+- **v14.0.0 更新**: `NaN` 被视为相等，如果两边都是 `NaN`。
+
+#### 参数:
+- `actual <any>`: 实际值。
+- `expected <any>`: 预期值。
+- `message <string> | <Error>`: 可选的错误消息或错误对象。
+
+`assert.notEqual()` 使用 `!=` 操作符测试实际值和预期值之间的浅层强制不相等性。如果两个值相等，则抛出 `AssertionError`。
+
+#### 示例：
+
+```javascript
+const assert = require('node:assert');
+
+assert.notEqual(1, 2);
+// OK
+
+assert.notEqual(1, 1);
+// AssertionError: 1 != 1
+
+assert.notEqual(1, '1');
+// AssertionError: 1 != '1'
+```
+
+#### 错误消息：
+如果 `actual` 和 `expected` 相等，则抛出 `AssertionError`。如果 `message` 参数未定义，则会使用默认错误消息。如果 `message` 是 `Error` 实例，则会抛出该错误而不是 `AssertionError`。
+
+---
+
+### `assert.notStrictEqual(actual, expected[, message])`
+
+#### 历史背景
+- **引入版本**: v0.1.21
+- **v10.0.0 更新**: 比较方法从严格相等 (`===`) 改为 `Object.is()`。
+
+#### 参数:
+- `actual <any>`: 实际值。
+- `expected <any>`: 预期值。
+- `message <string> | <Error>`: 可选的错误消息或错误对象。
+
+`assert.notStrictEqual()` 用于测试实际值和预期值之间的严格不相等性。它使用 `Object.is()` 进行比较。
+
+#### 示例：
+
+```javascript
+const assert = require('node:assert/strict');
+
+assert.notStrictEqual(1, 2);
+// OK
+
+assert.notStrictEqual(1, 1);
+// AssertionError [ERR_ASSERTION]: Expected "actual" to be strictly unequal to:
+//
+// 1
+
+assert.notStrictEqual(1, '1');
+// OK
+```
+
+#### 错误消息：
+如果 `actual` 和 `expected` 严格相等，则抛出 `AssertionError`。如果 `message` 参数未定义，则会使用默认错误消息。如果 `message` 是 `Error` 实例，则会抛出该错误而不是 `AssertionError`。
+
+---
+
+### `assert.ok(value[, message])`
+
+#### 历史背景
+- `value <any>`: 要测试的值。
+- `message <string> | <Error>`: 可选的错误消息或错误对象。
+
+`assert.ok()` 用于测试 `value` 是否为真值。它相当于 `assert.equal(!!value, true, message)`。如果 `value` 不是真值，则抛出 `AssertionError`。
+
+#### 示例：
+
+```javascript
+const assert = require('node:assert/strict');
+
+assert.ok(true);
+// OK
+
+assert.ok(1);
+// OK
+
+assert.ok();
+// AssertionError: No value argument passed to `assert.ok()`
+
+assert.ok(false, 'it\'s false');
+// AssertionError: it's false
+```
+
+#### 错误消息：
+如果 `value` 不是真值，则会抛出 `AssertionError`。如果 `message` 参数未定义，则会使用默认错误消息。如果 `message` 是 `Error` 实例，则会抛出该错误而不是 `AssertionError`。
+
+在 REPL 中，错误消息可能与在文件中执行时有所不同。例如：
+
+```javascript
+// 在 REPL 中:
+assert.ok(typeof 123 === 'string');
+// AssertionError: false == true
+
+// 在文件中 (例如 test.js):
+assert.ok(typeof 123 === 'string');
+// AssertionError: The expression evaluated to a falsy value:
+//
+//   assert.ok(typeof 123 === 'string')
+
+assert.ok(false);
+// AssertionError: The expression evaluated to a falsy value:
+//
+//   assert.ok(false)
+
+assert.ok(0);
+// AssertionError: The expression evaluated to a falsy value:
+//
+//   assert.ok(0)
+```
+
+#### 使用 `assert()`：
+`assert()` 的行为与 `assert.ok()` 相同：
+
+```javascript
+const assert = require('node:assert');
+
+assert(0);
+// AssertionError: The expression evaluated to a falsy value:
+//
+//   assert(0)
+```
+
+---
+
+### `assert.rejects(asyncFn[, error][, message])`
+
+#### 引入版本:
+- v10.0.0
+
+#### 参数:
+- `asyncFn <Function> | <Promise>`: 一个异步函数或 Promise。
+- `error <RegExp> | <Function> | <Object> | <Error>`: 可选。期望的错误，可以是类、正则表达式、验证函数、对象（每个属性都会被测试），或者错误实例。
+- `message <string>`: 可选的错误消息。
+
+`assert.rejects()` 用于断言 `asyncFn` 或 `Promise` 被**拒绝**。如果 `asyncFn` 是一个函数，则立即调用该函数并等待返回的 Promise 完成，并验证该 Promise 被拒绝。
+
+#### 行为说明:
+- 如果 `asyncFn` 是一个函数并同步抛出错误，`assert.rejects()` 会返回一个被拒绝的 Promise，并带有该错误。
+- 如果函数不返回 Promise，`assert.rejects()` 会返回一个被拒绝的 Promise，并带有错误代码 `ERR_INVALID_RETURN_VALUE`。
+- 如果指定了 `error` 参数，它可以是类、正则表达式、验证函数，或者一个对象，`assert.rejects()` 会将抛出的错误与 `error` 进行匹配。
+
+#### 示例:
+
+```javascript
+const assert = require('node:assert/strict');
+
+(async () => {
+  // 断言函数抛出 TypeError 并匹配错误的 name 和 message
+  await assert.rejects(
+    async () => {
+      throw new TypeError('Wrong value');
+    },
+    {
+      name: 'TypeError',
+      message: 'Wrong value',
+    },
+  );
+})();
+```
+
+```javascript
+const assert = require('node:assert/strict');
+
+(async () => {
+  // 使用验证函数断言错误
+  await assert.rejects(
+    async () => {
+      throw new TypeError('Wrong value');
+    },
+    (err) => {
+      assert.strictEqual(err.name, 'TypeError');
+      assert.strictEqual(err.message, 'Wrong value');
+      return true;
+    },
+  );
+})();
+```
+
+```javascript
+const assert = require('node:assert/strict');
+
+// 直接断言 Promise 被拒绝
+assert.rejects(
+  Promise.reject(new Error('Wrong value')),
+  Error,
+).then(() => {
+  // ...
+});
+```
+
+#### 注意:
+- `error` 参数不能是字符串。如果提供字符串作为第二个参数，则 `error` 会被忽略，并将字符串视为 `message` 参数。这可能导致易于忽略的错误，特别是如果使用字符串作为第二个参数时，请仔细参考 `assert.throws()` 的示例。
+
+---
+
+### `assert.strictEqual(actual, expected[, message])`
+
+#### 历史背景:
+- **引入版本**: v0.1.21
+
+#### 参数:
+- `actual <any>`: 实际值。
+- `expected <any>`: 预期值。
+- `message <string> | <Error>`: 可选的错误消息或错误对象。
+
+`assert.strictEqual()` 用于测试 `actual` 和 `expected` 之间的**严格相等**性，使用 `Object.is()` 进行比较。如果 `actual` 和 `expected` 不严格相等，则抛出 `AssertionError`。
+
+#### 示例:
+
+```javascript
+const assert = require('node:assert/strict');
+
+// 断言失败，因为 1 !== 2
+assert.strictEqual(1, 2);
+// AssertionError [ERR_ASSERTION]: Expected inputs to be strictly equal:
+//
+// 1 !== 2
+
+// 断言通过，因为 1 === 1
+assert.strictEqual(1, 1);
+// OK
+
+// 断言失败，因为字符串不相等
+assert.strictEqual('Hello foobar', 'Hello World!');
+// AssertionError [ERR_ASSERTION]: Expected inputs to be strictly equal:
+// + actual - expected
+//
+// + 'Hello foobar'
+// - 'Hello World!'
+//          ^
+
+const apples = 1;
+const oranges = 2;
+// 自定义错误消息
+assert.strictEqual(apples, oranges, `apples ${apples} !== oranges ${oranges}`);
+// AssertionError [ERR_ASSERTION]: apples 1 !== oranges 2
+
+// 使用自定义 TypeError 作为错误消息
+assert.strictEqual(1, '1', new TypeError('Inputs are not identical'));
+// TypeError: Inputs are not identical
+```
+
+#### 错误消息:
+如果 `actual` 和 `expected` 不相等，则抛出 `AssertionError`。如果 `message` 参数未定义，则会使用默认错误消息。如果 `message` 是 `Error` 实例，则会抛出该错误而不是 `AssertionError`。
+
+### `assert.throws(fn[, error][, message])`
+
+#### 历史背景:
+- `fn <Function>`: 要执行的函数，期望该函数抛出错误。
+- `error <RegExp> | <Function> | <Object> | <Error>`: 可选，期望捕获的错误，可以是正则表达式、类、验证函数、验证对象，或者错误实例。
+- `message <string>`: 可选的错误消息。
+
+`assert.throws()` 用于断言传入的函数 `fn` **应该抛出错误**。
+
+#### 行为说明:
+- 如果 `error` 参数被指定，它可以是类、正则表达式、验证函数、验证对象，或错误实例。该函数将对抛出的错误与 `error` 进行匹配验证，包括属性（如 `message` 和 `name`）的严格深度相等性。
+- 如果 `fn` 未抛出错误，`assert.throws()` 会抛出 `AssertionError`。
+- 如果传递了 `message` 参数，它将被添加到 `AssertionError` 的默认消息中。
+
+#### 自定义验证对象或错误实例示例：
+
+```javascript
+const assert = require('node:assert/strict');
+
+const err = new TypeError('Wrong value');
+err.code = 404;
+err.foo = 'bar';
+err.info = {
+  nested: true,
+  baz: 'text',
+};
+err.reg = /abc/i;
+
+assert.throws(
+  () => {
+    throw err;
+  },
+  {
+    name: 'TypeError',
+    message: 'Wrong value',
+    info: {
+      nested: true,
+      baz: 'text',
+    },
+    reg: /abc/i,
+  },
+);
+```
+
+#### 使用正则表达式验证错误属性：
+
+```javascript
+assert.throws(
+  () => {
+    throw new Error('Wrong value');
+  },
+  {
+    name: /^Error$/,
+    message: /Wrong/,
+  },
+);
+```
+
+#### 通过构造函数验证 `instanceof`：
+
+```javascript
+assert.throws(
+  () => {
+    throw new Error('Wrong value');
+  },
+  Error,
+);
+```
+
+#### 通过正则表达式验证错误消息：
+
+```javascript
+assert.throws(
+  () => {
+    throw new Error('Wrong value');
+  },
+  /^Error: Wrong value$/,
+);
+```
+
+#### 自定义错误验证函数：
+
+```javascript
+assert.throws(
+  () => {
+    throw new Error('Wrong value');
+  },
+  (err) => {
+    assert(err instanceof Error);
+    assert(/value/.test(err));
+    return true;
+  },
+  'unexpected error',
+);
+```
+
+#### 注意事项：
+- `error` 参数不能是字符串。如果将字符串作为第二个参数传入，则会被视为 `message`，而 `error` 会被忽略，这可能导致意外的错误。例如：
+
+```javascript
+const assert = require('node:assert/strict');
+
+function throwingFirst() {
+  throw new Error('First');
+}
+
+function throwingSecond() {
+  throw new Error('Second');
+}
+
+// 字符串 'Second' 被当作 message 而非 error，导致没有匹配到错误消息
+assert.throws(throwingFirst, 'Second');
+
+// 避免使用字符串作为第二个参数，应使用正则表达式匹配错误消息
+assert.throws(throwingSecond, /Second$/);
+```
+
+#### 总结：
+由于字符串作为第二个参数可能导致混淆和易于忽略的错误，建议避免这种用法，使用更明确的验证方法。
+
+---
+
+### `assert.strictEqual(actual, expected[, message])`
+
+#### 历史背景:
+- `actual <any>`: 实际值。
+- `expected <any>`: 预期值。
+- `message <string> | <Error>`: 可选的错误消息。
+
+`assert.strictEqual()` 用于测试 `actual` 和 `expected` 之间的严格相等性，使用 `Object.is()` 进行比较。如果两者不相等，则抛出 `AssertionError`。
+
+#### 示例：
+
+```javascript
+const assert = require('node:assert/strict');
+
+assert.strictEqual(1, 2);
+// AssertionError [ERR_ASSERTION]: Expected inputs to be strictly equal:
+//
+// 1 !== 2
+
+assert.strictEqual(1, 1);
+// OK
+
+assert.strictEqual('Hello foobar', 'Hello World!');
+// AssertionError [ERR_ASSERTION]: Expected inputs to be strictly equal:
+// + actual - expected
+//
+// + 'Hello foobar'
+// - 'Hello World!'
+//          ^
+
+const apples = 1;
+const oranges = 2;
+assert.strictEqual(apples, oranges, `apples ${apples} !== oranges ${oranges}`);
+// AssertionError [ERR_ASSERTION]: apples 1 !== oranges 2
+
+assert.strictEqual(1, '1', new TypeError('Inputs are not identical'));
+// TypeError: Inputs are not identical
+```
+
+#### 错误消息：
+如果值不严格相等，`assert.strictEqual()` 会抛出 `AssertionError`。如果提供了 `message` 参数，该消息会被添加到错误消息中。如果 `message` 是 `Error` 实例，则会抛出该错误而不是 `AssertionError`。
